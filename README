@@ -1,0 +1,17 @@
+iosplit - split console to separate input and output boxes
+
+Dependencies
+============
+
+- ncurses
+
+Configure & Install
+===================
+
+./configure ~
+make install
+
+Example
+=======
+
+iosplit
