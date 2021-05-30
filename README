@@ -1,5 +1,10 @@
 iosplit - split console to separate input and output boxes
 
+Useful when working with standard I/O programs that don't follow
+the request-response (giving output for an input) pattern, but may
+write to the terminal at random times, messing up the screen, i.e.
+programs that send events at arbitrary times such as IRC, MUD, MQTT.
+
 Dependencies
 ============
 
