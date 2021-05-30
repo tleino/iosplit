@@ -87,6 +87,11 @@ main(int argc, char *argv[])
 	if (pid == 0)
 		execl("/bin/sh", "/bin/sh", NULL);
 
+#ifdef __OpenBSD__
+	if (pledge("stdio tty", NULL) != 0)
+		err(1, "pledge");
+#endif
+
 	pfd[0].fd = STDIN_FILENO;
 	pfd[0].events = POLLIN;
 
