@@ -1,4 +1,4 @@
-iosplit - split console to separate input and output boxes
+iosplit - manage console stream with separate input and output cursors
 
 Useful when working with standard I/O programs that don't follow
 the request-response (giving output for an input) pattern, but may
