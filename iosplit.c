@@ -304,7 +304,11 @@ add_row(struct buffer *buffer, struct row *after)
 int
 main(int argc, char *argv[])
 {
-	WINDOW *win, *owin, *iwin, *swin;
+	WINDOW *win, *owin;
+#ifdef WANT_BOXES
+	WINDOW *iwin, *swin;
+	int col = 0;
+#endif
 	int ch;
 	char buf[4096 + 1], *p, ibuf[4096 + 1];
 	pid_t pid;
@@ -312,7 +316,6 @@ main(int argc, char *argv[])
 	int n;
 	struct pollfd pfd[2];
 	int nready;
-	int col = 0;
 	static struct buffer buffer;
 	struct row *row;
 	int rows, cols;
@@ -331,11 +334,10 @@ main(int argc, char *argv[])
 	init_pair(1, COLOR_WHITE, COLOR_GREEN);
 	init_pair(2, COLOR_WHITE, COLOR_RED);
 
+#ifdef WANT_BOXES
 	owin = newwin(getmaxy(win) - 2, getmaxx(win), 0, 0);
 	swin = newwin(1, getmaxx(win), getmaxy(win) - 2, 0);
 	iwin = newwin(1, getmaxx(win), getmaxy(win) - 1, 0);
-
-	getmaxyx(owin, rows, cols);
 
 	idlok(iwin, true);
 	idlok(owin, true);
@@ -349,6 +351,18 @@ main(int argc, char *argv[])
 	wrefresh(owin);
 	wrefresh(iwin);
 	wrefresh(swin);
+#else
+	owin = newwin(getmaxy(win), getmaxx(win), 0, 0);
+
+	idlok(owin, true);
+	keypad(owin, true);
+	keypad(win, true);
+	curs_set(0);
+	wrefresh(win);
+	wrefresh(owin);
+#endif
+
+	getmaxyx(owin, rows, cols);
 
 	raw();
 	noecho();
@@ -377,7 +391,7 @@ main(int argc, char *argv[])
 		if (nready == -1)
 			err(1, "poll");
 		if (pfd[0].revents & (POLLIN|POLLHUP)) {
-			ch = wgetch(iwin);
+			ch = wgetch(win);
 
 			/*
 			 * Write control commands immediately.
@@ -472,9 +486,11 @@ main(int argc, char *argv[])
 				draw_buffer(owin, &buffer, rows);
 				break;
 			}
+#ifdef WANT_BOXES
 			mvwprintw(swin, 0, 72-1, "%3d", col + 1);
 			wrefresh(swin);
 			wrefresh(iwin);
+#endif
 		}
 		if (pfd[1].revents & (POLLIN|POLLHUP)) {
 			n = read(fd, ibuf, sizeof(ibuf));
@@ -491,7 +507,9 @@ main(int argc, char *argv[])
 			}
 			draw_buffer(owin, &buffer, rows);
 			wrefresh(owin);
+#ifdef WANT_BOXES
 			wrefresh(iwin);
+#endif
 		}
 	}
 
