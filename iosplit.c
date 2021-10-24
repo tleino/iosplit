@@ -256,12 +256,11 @@ draw_buffer(WINDOW *win, struct buffer *buffer, int rows)
 	linenum = buffer->view.top_linenum;
 	row = 0;
 	for (np = buffer->view.top; np != NULL && row < rows;
-	    np = np->next, rows++) {
-		wmove(win, linenum, 0);
-		wclrtoeol(win);
+	    np = np->next, row++) {
+		wmove(win, row, 0);
 #ifdef WANT_ROW_INFO
 		wattron(win, A_REVERSE);
-		mvwprintw(win, linenum, 0, "%3d %3d/%3d %3d %c",
+		printw(win, "%3d %3d/%3d %3d %c",
 		    linenum+1, np->text_len,
 		    np->text_alloc, np->prompt_len,
 		    np->flags & CMD_ROW ? 'c' : '-');
@@ -295,6 +294,8 @@ draw_buffer(WINDOW *win, struct buffer *buffer, int rows)
 			wattroff(win, COLOR_PAIR(2));
 
 		linenum++;
+
+		wclrtoeol(win);
 	}
 	wclrtobot(win);
 	wrefresh(win);
@@ -553,7 +554,6 @@ main(int argc, char *argv[])
 				break;
 			}
 			draw_buffer(owin, &buffer, rows);
-			wrefresh(owin);
 #ifdef WANT_BOXES
 			wrefresh(iwin);
 #endif
