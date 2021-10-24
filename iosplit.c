@@ -7,10 +7,10 @@
 #include <assert.h>
 #include <string.h>
 
-#ifdef __OpenBSD__
-#include <util.h>
-#else
+#ifdef HAVE_PTY_H
 #include <pty.h>
+#else
+#include <util.h>
 #endif
 
 #ifndef INFTIM
@@ -325,7 +325,7 @@ main(int argc, char *argv[])
 	if (pid == 0)
 		execl("/bin/sh", "/bin/sh", NULL);
 
-#ifdef __OpenBSD__
+#ifdef HAVE_PLEDGE
 	if (pledge("stdio tty", NULL) != 0)
 		err(1, "pledge");
 #endif

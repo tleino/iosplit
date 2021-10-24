@@ -35,12 +35,12 @@ check_system() {
 	case $(uname) in
 		Linux )
 			SYSTEM_CFLAGS="-D_POSIX_C_SOURCE=200809L"
-			SYSTEM_LDFLAGS="-lutil"
+			SYSTEM_LDFLAGS="-lutil -DHAVE_PTY_H"
 			check_pkgs ncurses
 		;;
 		OpenBSD )
 			SYSTEM_CFLAGS=
-			SYSTEM_LDFLAGS="-lncurses -lutil"
+			SYSTEM_LDFLAGS="-lncurses -lutil -DHAVE_PLEDGE"
 		;;
 	esac
 	echo "system: $(uname)"
