@@ -23,6 +23,7 @@
 
 struct view {
 	struct row *top;
+	size_t top_linenum;
 };
 
 enum {
@@ -40,6 +41,7 @@ struct buffer {
 	struct cursor input;
 	struct cursor output;
 	struct row *first;
+	struct view view;
 };
 
 #define CMD_ROW (1 << 0)
@@ -57,8 +59,8 @@ struct row {
 
 #define ROW_INITIAL_ALLOC (40)
 
-void insert_text(struct cursor *, struct cursor *, char *);
-void draw_buffer(WINDOW *, struct buffer *);
+void insert_text(struct cursor *, struct cursor *, char *, int);
+void draw_buffer(WINDOW *, struct buffer *, int);
 void init_buffer(struct buffer *);
 struct row *add_row(struct buffer *, struct row *);
 int is_trailing_cursor(struct cursor *, struct cursor *);
@@ -66,6 +68,20 @@ struct row *find_row_flags(struct row *, int);
 void remove_row(struct row *);
 void clear_to(struct row *, struct row *);
 void set_cursor(struct cursor *, struct row *, size_t);
+size_t nlines(struct row *, struct row *);
+
+size_t
+nlines(struct row *begin, struct row *end)
+{
+	struct row *np;
+	size_t n;
+
+	n = 0;
+	for (np = begin; np != NULL && np != end; np = np->next)
+		n++;
+
+	return n;
+}
 
 int
 is_trailing_cursor(struct cursor *candidate, struct cursor *reference)
@@ -90,12 +106,18 @@ find_row_flags(struct row *np, int flags)
 void
 remove_row(struct row *np)
 {
+	if (np == np->buffer->first && np->buffer->first->next == NULL)
+		return;
+
 	if (np->prev)
 		np->prev->next = np->next;
 	if (np->next)
 		np->next->prev = np->prev;
-	if (np == np->buffer->first)
+	if (np == np->buffer->first) {
+		if (np->buffer->view.top == np)
+			np->buffer->view.top = np->next;
 		np->buffer->first = np->next;
+	}
 	free(np);
 }
 
@@ -111,7 +133,7 @@ clear_to(struct row *np, struct row *last)
 }
 
 void
-insert_text(struct cursor *cursor, struct cursor *other, char *text)
+insert_text(struct cursor *cursor, struct cursor *other, char *text, int rows)
 {
 	struct row *row;
 
@@ -137,6 +159,12 @@ insert_text(struct cursor *cursor, struct cursor *other, char *text)
 				cursor->col = 0;
 			}
 			text++;
+
+			if (nlines(cursor->row->buffer->view.top,
+			    row) >= rows)
+				cursor->row->buffer->view.top =
+				    cursor->row->buffer->view.top->next;
+
 			continue;
 		}
 
@@ -168,15 +196,17 @@ insert_text(struct cursor *cursor, struct cursor *other, char *text)
 }
 
 void
-draw_buffer(WINDOW *win, struct buffer *buffer)
+draw_buffer(WINDOW *win, struct buffer *buffer, int rows)
 {
 	struct row *np;
-	size_t linenum, i;
+	size_t linenum, i, row;
 
 	assert(buffer != NULL);
 
-	linenum = 0;
-	for (np = buffer->first; np != NULL; np = np->next) {
+	linenum = buffer->view.top_linenum;
+	row = 0;
+	for (np = buffer->view.top; np != NULL && row < rows;
+	    np = np->next, rows++) {
 		wmove(win, linenum, 0);
 		wclrtoeol(win);
 #ifdef WANT_ROW_INFO
@@ -237,6 +267,9 @@ init_buffer(struct buffer *buffer)
 	set_cursor(&buffer->output, buffer->first, 0);
 	buffer->input.type = INPUT_CURSOR;
 	buffer->output.type = OUTPUT_CURSOR;
+
+	buffer->view.top = buffer->first;
+	buffer->view.top_linenum = 0;
 }
 
 struct row *
@@ -282,6 +315,7 @@ main(int argc, char *argv[])
 	int col = 0;
 	static struct buffer buffer;
 	struct row *row;
+	int rows, cols;
 
 	init_buffer(&buffer);
 
@@ -301,8 +335,8 @@ main(int argc, char *argv[])
 	swin = newwin(1, getmaxx(win), getmaxy(win) - 2, 0);
 	iwin = newwin(1, getmaxx(win), getmaxy(win) - 1, 0);
 
-	scrollok(iwin, true);
-	scrollok(owin, true);
+	getmaxyx(owin, rows, cols);
+
 	idlok(iwin, true);
 	idlok(owin, true);
 	keypad(iwin, true);
@@ -378,12 +412,14 @@ main(int argc, char *argv[])
 				break;
 			case KEY_UP:
 				row = buffer.input.row;
+				if (row == buffer.view.top && row->prev)
+					buffer.view.top = row->prev;
 				row = buffer.input.row = row->prev;
 				if (row == NULL)
 					row = buffer.input.row = buffer.first;
 				if (buffer.input.col >= row->text_len)
 					buffer.input.col = row->text_len;
-				draw_buffer(owin, &buffer);
+				draw_buffer(owin, &buffer, rows);
 				break;
 			case KEY_DOWN:
 				row = buffer.input.row;
@@ -391,18 +427,24 @@ main(int argc, char *argv[])
 					row = buffer.input.row = row->next;
 				if (buffer.input.col >= row->text_len)
 					buffer.input.col = row->text_len;
-				draw_buffer(owin, &buffer);
+
+				if (nlines(row->buffer->view.top,
+				    row) >= rows)
+					row->buffer->view.top =
+					    row->buffer->view.top->next;
+
+				draw_buffer(owin, &buffer, rows);
 				break;
 			case KEY_LEFT:
 				if (buffer.input.col > 0)
 					buffer.input.col--;
-				draw_buffer(owin, &buffer);
+				draw_buffer(owin, &buffer, rows);
 				break;
 			case KEY_RIGHT:
 				row = buffer.input.row;
 				if (buffer.input.col < row->text_len)
 					buffer.input.col++;
-				draw_buffer(owin, &buffer);
+				draw_buffer(owin, &buffer, rows);
 				break;
 			case KEY_BACKSPACE:
 				row = buffer.input.row;
@@ -420,14 +462,14 @@ main(int argc, char *argv[])
 					if (row->text != NULL)
 						row->text[row->text_len] = '\0';
 				}
-				draw_buffer(owin, &buffer);
+				draw_buffer(owin, &buffer, rows);
 				break;
 			default:
 				ibuf[0] = ch;
 				ibuf[1] = '\0';
 				insert_text(&buffer.input, &buffer.output,
-				    ibuf);
-				draw_buffer(owin, &buffer);
+				    ibuf, rows);
+				draw_buffer(owin, &buffer, rows);
 				break;
 			}
 			mvwprintw(swin, 0, 72-1, "%3d", col + 1);
@@ -439,7 +481,7 @@ main(int argc, char *argv[])
 			if (n > 0) {
 				ibuf[n] = '\0';
 				insert_text(&buffer.output, &buffer.input,
-				    ibuf);
+				    ibuf, rows);
 			} else {
 				if (n < 0) {
 					endwin();
@@ -447,7 +489,7 @@ main(int argc, char *argv[])
 				}
 				break;
 			}
-			draw_buffer(owin, &buffer);
+			draw_buffer(owin, &buffer, rows);
 			wrefresh(owin);
 			wrefresh(iwin);
 		}
