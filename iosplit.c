@@ -209,10 +209,16 @@ insert_text(struct cursor *cursor, struct cursor *other, char *text,
 			}
 			text++;
 
-			if (nlines(cursor->row->buffer->view.top,
+			/*
+			 * Scroll so that input cursor will be visible.
+			 */
+			if (cursor->type == OUTPUT_CURSOR)
+				row = other->row;
+
+			while (nlines(row->buffer->view.top,
 			    row) >= rows)
-				cursor->row->buffer->view.top =
-				    cursor->row->buffer->view.top->next;
+				row->buffer->view.top =
+				    row->buffer->view.top->next;
 
 			continue;
 		}
