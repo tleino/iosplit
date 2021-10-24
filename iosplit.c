@@ -179,6 +179,7 @@ draw_buffer(WINDOW *win, struct buffer *buffer)
 	for (np = buffer->first; np != NULL; np = np->next) {
 		wmove(win, linenum, 0);
 		wclrtoeol(win);
+#ifdef WANT_ROW_INFO
 		wattron(win, A_REVERSE);
 		mvwprintw(win, linenum, 0, "%3d %3d/%3d %3d %c",
 		    linenum+1, np->text_len,
@@ -186,6 +187,7 @@ draw_buffer(WINDOW *win, struct buffer *buffer)
 		    np->flags & CMD_ROW ? 'c' : '-');
 		wattroff(win, A_REVERSE);
 		waddch(win, ' ');
+#endif
 		for (i = 0; i < np->text_len; i++) {
 			if (np->text[i] == '\r')
 				continue;
@@ -205,7 +207,7 @@ draw_buffer(WINDOW *win, struct buffer *buffer)
 		else if (buffer->output.row == np && buffer->output.col == i)
 			wattron(win, COLOR_PAIR(2));
 
-		waddch(win, '<');
+		waddch(win, ' ');
 
 		if (buffer->input.row == np && buffer->input.col == i)
 			wattroff(win, COLOR_PAIR(1));
