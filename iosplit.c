@@ -75,7 +75,7 @@ struct row {
 
 #define ROW_INITIAL_ALLOC (40)
 
-void insert_text(struct cursor *, struct cursor *, char *, int);
+void insert_text(struct cursor *, struct cursor *, char *, size_t, int);
 void draw_buffer(WINDOW *, struct buffer *, int);
 void init_buffer(struct buffer *);
 struct row *add_row(struct buffer *, struct row *);
@@ -148,26 +148,59 @@ clear_to(struct row *np, struct row *last)
 	}
 }
 
+/*
+ * TODO: Simplify.
+ *
+ * Insert 'text' of 'len' bytes to 'cursor' while managing 'other'
+ * cursor, and scrolling the view if we're exceeding 'rows'.
+ *
+ * If we're inserting a new output row to a row which has input
+ * content, move the input content to a row of its own.
+ */
 void
-insert_text(struct cursor *cursor, struct cursor *other, char *text, int rows)
+insert_text(struct cursor *cursor, struct cursor *other, char *text,
+    size_t len, int rows)
 {
 	struct row *row;
+	size_t i;
+	int other_cursor_ok;
 
 	assert(cursor != NULL);
 	assert(cursor->row != NULL);
 
-	while (*text != '\0') {
+	for (i = 0; i < len; i++) {
 		if (*text == '\r') {
 			text++;
 			continue;
 		}
+		other_cursor_ok = 0;
 		if (*text == '\n') {
+			if (other->type == INPUT_CURSOR &&
+			    is_trailing_cursor(other, cursor) &&
+			    cursor->row == other->row) {
+				if (cursor->row->prompt_len <
+				    cursor->row->text_len) {
+					other->row =
+					    add_row(cursor->row->buffer,
+					    cursor->row);
+					other->col = 0;
+					insert_text(other, cursor,
+					    &other->row->prev->text[cursor->row->prompt_len],
+					    cursor->row->text_len -
+					    cursor->row->prompt_len, rows);
+					cursor->row->text_len =
+					    cursor->row->prompt_len;
+					other_cursor_ok = 1;
+				}
+			}
+
 			if (cursor->type == OUTPUT_CURSOR)
 				cursor->row->prompt_len = 0;
 
 			row = add_row(cursor->row->buffer, cursor->row);
 
-			if (is_trailing_cursor(other, cursor)) {
+			if (is_trailing_cursor(other, cursor) &&
+			    !other_cursor_ok) {
 				cursor->row = other->row = row;
 				cursor->col = other->col = 0;
 			} else {
@@ -496,10 +529,8 @@ main(int argc, char *argv[])
 				draw_buffer(owin, &buffer, rows);
 				break;
 			default:
-				ibuf[0] = ch;
-				ibuf[1] = '\0';
 				insert_text(&buffer.input, &buffer.output,
-				    ibuf, rows);
+				    (char *) &ch, 1, rows);
 				draw_buffer(owin, &buffer, rows);
 				break;
 			}
@@ -512,9 +543,8 @@ main(int argc, char *argv[])
 		if (pfd[1].revents & (POLLIN|POLLHUP)) {
 			n = read(fd, ibuf, sizeof(ibuf));
 			if (n > 0) {
-				ibuf[n] = '\0';
 				insert_text(&buffer.output, &buffer.input,
-				    ibuf, rows);
+				    ibuf, n, rows);
 			} else {
 				if (n < 0) {
 					endwin();
