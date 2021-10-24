@@ -197,7 +197,8 @@ insert_text(struct cursor *cursor, struct cursor *other, char *text, int rows)
 		if (cursor->col > cursor->row->text_len)
 			cursor->col = cursor->row->text_len;
 
-		if (is_trailing_cursor(other, cursor))
+		if (is_trailing_cursor(other, cursor) &&
+		    other->type != OUTPUT_CURSOR)
 			other->col++;
 
 		cursor->row->text_len++;
